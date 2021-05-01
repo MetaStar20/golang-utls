@@ -1,19 +1,20 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/tidwall/gjson"
-
-	//"github.com/google/uuid"
+	tls "github.com/refraction-networking/utls"
 	uuid "github.com/satori/go.uuid"
+	"github.com/tidwall/gjson"
 )
 
 type Bearer_Response struct {
@@ -37,8 +38,188 @@ type Cart struct {
 	X      map[string]interface{} `json:"-"` // Rest of the fields should go here.
 }
 
+var hostname = "api-prod.lowes.com" // speaks http2 and TLS 1.3
+var addr = "api-prod.lowes.com:443" //23.40.124.118:443
+var dialTimeout = time.Duration(15) * time.Second
+
+/**************************** simulate the handshake from wireshark ******************/
+
+func handShakeFromWhareSharkBytes() {
+
+	/**************************************    ClientHelloSpec structure    **************************************************
+	type ClientHelloSpec struct {
+	CipherSuites       []uint16       // nil => default
+	CompressionMethods []uint8        // nil => no compression
+	Extensions         []TLSExtension // nil => no extensions
+	TLSVersMin uint16 // [1.0-1.3] default: parse from .Extensions, if SupportedVersions ext is not present => 1.0
+	TLSVersMax uint16 // [1.2-1.3] default: parse from .Extensions, if SupportedVersions ext is not present => 1.2
+	GetSessionID func(ticket []byte) [32]byte
+	}	**********************************************************************************************************************/
+
+	config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
+
+	dialConn, err := net.DialTimeout("tcp", addr, dialTimeout)
+	if err != nil {
+		fmt.Println("net.DialTimeout error: %+v", err)
+	}
+
+	/* establish UClient of UTLS...*/
+	uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
+	defer uTlsConn.Close()
+
+	// TLSv1.3 Record Layer: Handshake Protocol: Client Hello (This is Sample Structure....)
+	//     Content Type: Handshake (22)
+	//     Version: TLS 1.0 (0x0301)
+	//     Length: 576
+	// Handshake Protocol: Client Hello
+	// 		Handshake Type: Client Hello (1)
+	// 		Length: 572
+	// 		Version: TLS 1.2 (0x0303)
+	// 		Random: 5cef5aa9122008e37f0f74d717cd4ae0f745daba4292e6fb…
+	// 		Session ID Length: 32
+	// 		Session ID: 8c4aa23444084eeb70097efe0b8f6e3a56c717abd67505c9…
+	// 		Cipher Suites Length: 32
+	// 		Cipher Suites (16 suites)
+	// 		Compression Methods Length: 1
+	// 		Compression Methods (1 method)
+	// 		Extensions Length: 467
+	// 		Extension: Reserved (GREASE) (len=0)
+	// 				Type: Reserved (GREASE) (14906)
+	// 				Length: 0
+	// 				Data: <MISSING>
+	// 		Extension: server_name (len=22)
+	// 				Type: server_name (0)
+	// 				Length: 22
+	// 				Server Name Indication extension
+	// 						Server Name list length: 20
+	// 						Server Name Type: host_name (0)
+	// 						Server Name length: 17
+	// 						Server Name: edgeapi.slack.com
+	// 		Extension: extended_master_secret (len=0)
+	// 				Type: extended_master_secret (23)
+	// 				Length: 0
+	// 		Extension: renegotiation_info (len=1)
+	// 				Type: renegotiation_info (65281)
+	// 				Length: 1
+	// 				Renegotiation Info extension
+	// 						Renegotiation info extension length: 0
+	// 		Extension: supported_groups (len=10)
+	// 				Type: supported_groups (10)
+	// 				Length: 10
+	// 				Supported Groups List Length: 8
+	// 				Supported Groups (4 groups)
+	// 						Supported Group: Reserved (GREASE) (0xdada)
+	// 						Supported Group: x25519 (0x001d)
+	// 						Supported Group: secp256r1 (0x0017)
+	// 						Supported Group: secp384r1 (0x0018)
+	// 		Extension: ec_point_formats (len=2)
+	// 				Type: ec_point_formats (11)
+	// 				Length: 2
+	// 				EC point formats Length: 1
+	// 				Elliptic curves point formats (1)
+	// 		Extension: session_ticket (len=0)
+	// 				Type: session_ticket (35)
+	// 				Length: 0
+	// 				Data (0 bytes)
+	// 		Extension: application_layer_protocol_negotiation (len=14)
+	// 				Type: application_layer_protocol_negotiation (16)
+	// 				Length: 14
+	// 				ALPN Extension Length: 12
+	// 				ALPN Protocol
+	// 						ALPN string length: 2
+	// 						ALPN Next Protocol: h2
+	// 						ALPN string length: 8
+	// 						ALPN Next Protocol: http/1.1
+	// 		Extension: status_request (len=5)
+	// 				Type: status_request (5)
+	// 				Length: 5
+	// 				Certificate Status Type: OCSP (1)
+	// 				Responder ID list Length: 0
+	// 				Request Extensions Length: 0
+	// 		Extension: signature_algorithms (len=18)
+	// 				Type: signature_algorithms (13)
+	// 				Length: 18
+	// 				Signature Hash Algorithms Length: 16
+	// 				Signature Hash Algorithms (8 algorithms)
+	// 		Extension: signed_certificate_timestamp (len=0)
+	// 				Type: signed_certificate_timestamp (18)
+	// 				Length: 0
+	// 		Extension: key_share (len=43)
+	// 				Type: key_share (51)
+	// 				Length: 43
+	// 				Key Share extension
+	// 						Client Key Share Length: 41
+	// 						Key Share Entry: Group: Reserved (GREASE), Key Exchange length: 1
+	// 								Group: Reserved (GREASE) (56026)
+	// 								Key Exchange Length: 1
+	// 								Key Exchange: 00
+	// 						Key Share Entry: Group: x25519, Key Exchange length: 32
+	// 								Group: x25519 (29)
+	// 								Key Exchange Length: 32
+	// 								Key Exchange: e35e636d4e2dcd5f39309170285dab92dbe81fefe4926826…
+	// 		Extension: psk_key_exchange_modes (len=2)
+	// 				Type: psk_key_exchange_modes (45)
+	// 				Length: 2
+	// 				PSK Key Exchange Modes Length: 1
+	// 				PSK Key Exchange Mode: PSK with (EC)DHE key establishment (psk_dhe_ke) (1)
+	// 		Extension: supported_versions (len=11)
+	// 				Type: supported_versions (43)
+	// 				Length: 11
+	// 				Supported Versions length: 10
+	// 				Supported Version: Unknown (0x2a2a)
+	// 				Supported Version: TLS 1.3 (0x0304)
+	// 				Supported Version: TLS 1.2 (0x0303)
+	// 				Supported Version: TLS 1.1 (0x0302)
+	// 				Supported Version: TLS 1.0 (0x0301)
+	// 		Extension: compress_certificate (len=3)
+	// 				Type: compress_certificate (27)
+	// 				Length: 3
+	// 				Algorithms Length: 2
+	// 				Algorithm: brotli (2)
+	// 		Extension: Reserved (GREASE) (len=1)
+	// 				Type: Reserved (GREASE) (19018)
+	// 				Length: 1
+	// 				Data: 00
+	// 		Extension: pre_shared_key (len=267)
+	// 				Type: pre_shared_key (41)
+	// 				Length: 267
+	//
+
+	// make custom TLS generatedSpec from wireshark captured data.
+	byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
+	_, err = hex.Decode(helloBytes, byteString)
+	if err != nil {
+		fmt.Println("Hex Decode error..........")
+	}
+
+	/* establish UClient of UTLS...*/
+
+	f := &tls.Fingerprinter{}
+	generatedSpec, err := f.FingerprintClientHello(helloBytes)
+
+	/* confirm genericSpec... */
+	err = uTlsConn.ApplyPreset(generatedSpec)
+
+	if err != nil {
+		fmt.Println("uTlsConn.Handshake() ApplyPreset: %+v", err)
+	}
+
+	// Handshake runs the client handshake using given clientHandshakeState
+	// Requires hs.hello, and, optionally, hs.session to be set.
+
+	err = uTlsConn.Handshake()
+	if err != nil {
+		fmt.Println("uTlsConn.Handshake() Handshake: %+v", err)
+	}
+
+	fmt.Println(".............  UTLS HandShake is completed Successfully  ..........")
+
+}
+
 func main() {
 
+	handShakeFromWhareSharkBytes()
 	client := &http.Client{}
 	//Setting up first post request to get bearer authorization
 	req, err := http.NewRequest("POST", "https://api-prod.lowes.com/oauth2/accesstoken", strings.NewReader("client_id=pGAW7y8NJVlZvoWijVia21K4HzOqskRU&client_secret=zbwMYDyPp4XQS00E&grant_type=client_credentials"))
@@ -88,7 +269,7 @@ func main() {
 	//adding header values for guestidentify from android mobile app
 	req2.Header.Add("User-Agent", "LowesMobileApp/21.1.3(Android 5.1.1;LVY48F)")
 	req2.Header.Add("Host", "api-prod.lowes.com")
-	req2.Header.Add("X-acf-sensor-data", x_acf_sensor_data)
+	req2.Header.Add("X-acf-sensor-data", x_acf_sensor_data) //"2,i,I5Od8wc7Mx8TXBLYDx0GUA2wL92QZXIJ4Cw0hR8AHEwF/gnboZxWa5tpkRhoreYa2kQZAYmoaXiEf4Xybx8BYYFY5fhnZYsAL5rB50U0KjlHGVR2+4ZpXqA3rcsXOMUpdamuhVYLifTvyfJc4TgGp1XUwHkK36cor+hHWa1s9Ps=,gSgpvT5IPcoZi7krwRUi/vBUu8c3OUEMQfr6l/jnsiTesC3luozWcq6ktZqINuIDFKeb8w4yZZh6qqptPeZPVpjFeRI6YaZ0mLDBUOewHXT5F/MGJPTmuX8TKVbC/Hu08wnH0qyLB5E6NumUQvCnHocZ7axuGIQRXYvKTk0DgoY=$rYdDwdDbpPQlWLn15479uHKtjKM9YdE3s6e6B5FM+ZnWtnNyXhU+kCt4uv7681qFCfnlx0rrNN8LspnmrGInGopoZCX6W3jqlNb5zm5zWGUQ+J+WiJ3MNgAg6N/LQ0RNHkbYh0Xmd0eqDsUNf8GHg+Ihhzd5aXYV9I0TS1nFGdouaSikBj28qyewfnIEUQG2Dyj+Uv4CS4hutPlc+ULYcP+T3leYW1RCUrVmKNwLL8+w1oIQH2kodFjsg4vJprU9CEHy90uRyln1gQ+SMcA2GrtFvSr77waVD99H7X315K/o7pucpUQoFiDXggxn6lPoVd33/+qdPEAYk0foF5Hfsg5jmq+W5yZLvZrBcVyKWbJJ8HY0Y/2koL76jUd4YbGVreAhCDFFnJ0JergaupdGOmbgXN2zkRwy+tak9z36m4ef5sCyySAMTFIL8Tdq1/w2ZADT051V7dEZm+heCTAx59zrn/K77F/x72tgVH1hfU9e6UekM12QYlnZ9BUQtRyv518+9tbZ/LN0ojpxYPzeT2ED6EVxlRHgfORY7LgP47l4GSMW41pDe9+CsIPJU7cfzf65bFFh3Y6wnIS3K09GLpMugw/y4VySKKoeR4t3RS/5uFrjsXLUzwyQiL+3LfknSEBOukh0crxeHCR2rgcukSqsslHR88dWWyiuBloSReYc6TpoP4z+aR8CDedBLohmfSaMBoUacw2RDde1l0YfNOrRwn5qXcFHOjePpNFha8fenyQ1wbVZVfmgh8VZ4BYQ25uIYVz+CQyqdVZ/KklY5UgAOnXsa4psgkRQfemM6Nw=$7,5,5$$")
 	req2.Header.Add("x-lowes-originating-server-hostname", "Android")
 	req2.Header.Add("x-lowes-uuid", x_lowes_uuid)
 	req2.Header.Add("Authorization", bearer_access_token)
@@ -167,7 +348,6 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-
 			var cart_id string = cart_json.Cartid
 			fmt.Println(" - Cart Id: ", cart_id)
 
@@ -218,7 +398,7 @@ func main() {
 
 					// Save validation response into variable
 					var isValid = gjson.Get(bodyString, "coupons.#.isValid").Bool()
-					//fmt.Println(isValid)
+					fmt.Println(isValid)
 					if isValid {
 						fmt.Println(" - Promocode is Valid: ", promo_code)
 					} else {
@@ -226,8 +406,9 @@ func main() {
 					}
 
 				}
-				time.Sleep(time.Duration(rand.Intn(1500-2500)) * time.Millisecond)
+				time.Sleep(time.Duration(rand.Intn(1500)) * time.Millisecond)
 			}
+
 		}
 	} else {
 		fmt.Println("GuestIdentity blocked: ", resp.StatusCode)
