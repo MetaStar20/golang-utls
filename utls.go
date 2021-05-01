@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -38,8 +39,9 @@ type Cart struct {
 	X      map[string]interface{} `json:"-"` // Rest of the fields should go here.
 }
 
-var hostname = "api-prod.lowes.com" // speaks http2 and TLS 1.3
-var addr = "api-prod.lowes.com:443" //23.40.124.118:443
+var hostname = "api-prod.lowes.com"     // speaks http2 and TLS 1.3
+var hostAddr = "api-prod.lowes.com:443" //23.40.124.118:443
+var addr = "api-prod.lowes.com:443"     //23.40.124.118:443
 var dialTimeout = time.Duration(15) * time.Second
 
 /**************************** simulate the handshake from wireshark ******************/
@@ -66,124 +68,6 @@ func handShakeFromWhareSharkBytes() {
 	/* establish UClient of UTLS...*/
 	uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
 	defer uTlsConn.Close()
-
-	// TLSv1.3 Record Layer: Handshake Protocol: Client Hello (This is Sample Structure....)
-	//     Content Type: Handshake (22)
-	//     Version: TLS 1.0 (0x0301)
-	//     Length: 576
-	// Handshake Protocol: Client Hello
-	// 		Handshake Type: Client Hello (1)
-	// 		Length: 572
-	// 		Version: TLS 1.2 (0x0303)
-	// 		Random: 5cef5aa9122008e37f0f74d717cd4ae0f745daba4292e6fb…
-	// 		Session ID Length: 32
-	// 		Session ID: 8c4aa23444084eeb70097efe0b8f6e3a56c717abd67505c9…
-	// 		Cipher Suites Length: 32
-	// 		Cipher Suites (16 suites)
-	// 		Compression Methods Length: 1
-	// 		Compression Methods (1 method)
-	// 		Extensions Length: 467
-	// 		Extension: Reserved (GREASE) (len=0)
-	// 				Type: Reserved (GREASE) (14906)
-	// 				Length: 0
-	// 				Data: <MISSING>
-	// 		Extension: server_name (len=22)
-	// 				Type: server_name (0)
-	// 				Length: 22
-	// 				Server Name Indication extension
-	// 						Server Name list length: 20
-	// 						Server Name Type: host_name (0)
-	// 						Server Name length: 17
-	// 						Server Name: edgeapi.slack.com
-	// 		Extension: extended_master_secret (len=0)
-	// 				Type: extended_master_secret (23)
-	// 				Length: 0
-	// 		Extension: renegotiation_info (len=1)
-	// 				Type: renegotiation_info (65281)
-	// 				Length: 1
-	// 				Renegotiation Info extension
-	// 						Renegotiation info extension length: 0
-	// 		Extension: supported_groups (len=10)
-	// 				Type: supported_groups (10)
-	// 				Length: 10
-	// 				Supported Groups List Length: 8
-	// 				Supported Groups (4 groups)
-	// 						Supported Group: Reserved (GREASE) (0xdada)
-	// 						Supported Group: x25519 (0x001d)
-	// 						Supported Group: secp256r1 (0x0017)
-	// 						Supported Group: secp384r1 (0x0018)
-	// 		Extension: ec_point_formats (len=2)
-	// 				Type: ec_point_formats (11)
-	// 				Length: 2
-	// 				EC point formats Length: 1
-	// 				Elliptic curves point formats (1)
-	// 		Extension: session_ticket (len=0)
-	// 				Type: session_ticket (35)
-	// 				Length: 0
-	// 				Data (0 bytes)
-	// 		Extension: application_layer_protocol_negotiation (len=14)
-	// 				Type: application_layer_protocol_negotiation (16)
-	// 				Length: 14
-	// 				ALPN Extension Length: 12
-	// 				ALPN Protocol
-	// 						ALPN string length: 2
-	// 						ALPN Next Protocol: h2
-	// 						ALPN string length: 8
-	// 						ALPN Next Protocol: http/1.1
-	// 		Extension: status_request (len=5)
-	// 				Type: status_request (5)
-	// 				Length: 5
-	// 				Certificate Status Type: OCSP (1)
-	// 				Responder ID list Length: 0
-	// 				Request Extensions Length: 0
-	// 		Extension: signature_algorithms (len=18)
-	// 				Type: signature_algorithms (13)
-	// 				Length: 18
-	// 				Signature Hash Algorithms Length: 16
-	// 				Signature Hash Algorithms (8 algorithms)
-	// 		Extension: signed_certificate_timestamp (len=0)
-	// 				Type: signed_certificate_timestamp (18)
-	// 				Length: 0
-	// 		Extension: key_share (len=43)
-	// 				Type: key_share (51)
-	// 				Length: 43
-	// 				Key Share extension
-	// 						Client Key Share Length: 41
-	// 						Key Share Entry: Group: Reserved (GREASE), Key Exchange length: 1
-	// 								Group: Reserved (GREASE) (56026)
-	// 								Key Exchange Length: 1
-	// 								Key Exchange: 00
-	// 						Key Share Entry: Group: x25519, Key Exchange length: 32
-	// 								Group: x25519 (29)
-	// 								Key Exchange Length: 32
-	// 								Key Exchange: e35e636d4e2dcd5f39309170285dab92dbe81fefe4926826…
-	// 		Extension: psk_key_exchange_modes (len=2)
-	// 				Type: psk_key_exchange_modes (45)
-	// 				Length: 2
-	// 				PSK Key Exchange Modes Length: 1
-	// 				PSK Key Exchange Mode: PSK with (EC)DHE key establishment (psk_dhe_ke) (1)
-	// 		Extension: supported_versions (len=11)
-	// 				Type: supported_versions (43)
-	// 				Length: 11
-	// 				Supported Versions length: 10
-	// 				Supported Version: Unknown (0x2a2a)
-	// 				Supported Version: TLS 1.3 (0x0304)
-	// 				Supported Version: TLS 1.2 (0x0303)
-	// 				Supported Version: TLS 1.1 (0x0302)
-	// 				Supported Version: TLS 1.0 (0x0301)
-	// 		Extension: compress_certificate (len=3)
-	// 				Type: compress_certificate (27)
-	// 				Length: 3
-	// 				Algorithms Length: 2
-	// 				Algorithm: brotli (2)
-	// 		Extension: Reserved (GREASE) (len=1)
-	// 				Type: Reserved (GREASE) (19018)
-	// 				Length: 1
-	// 				Data: 00
-	// 		Extension: pre_shared_key (len=267)
-	// 				Type: pre_shared_key (41)
-	// 				Length: 267
-	//
 
 	// make custom TLS generatedSpec from wireshark captured data.
 	byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
@@ -219,8 +103,73 @@ func handShakeFromWhareSharkBytes() {
 
 func main() {
 
-	handShakeFromWhareSharkBytes()
-	client := &http.Client{}
+	// handShakeFromWhareSharkBytes()
+	// client := &http.Client{}
+	client := &http.Client{
+		// Jar: cookieJar,
+		Transport: &http.Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				// Note that hardcoding the address is not necessary here. Only
+				// do that if you want to ignore the DNS lookup that already
+				// happened behind the scenes.
+
+				byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+				helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
+				_, err := hex.Decode(helloBytes, byteString)
+				if err != nil {
+					// TLSv1t.Errorf("got error: %v; expected to succeed", err)
+					// return nil
+					fmt.Println("Hex Decode error..........")
+				}
+
+				f := &tls.Fingerprinter{}
+				generatedSpec, err := f.FingerprintClientHello(helloBytes)
+				if err != nil {
+					// t.Errorf("got error: %v; expected to succeed", err)
+					fmt.Println("FingerprintClientHello error..........")
+				}
+
+				// config := tls.Config{ServerName: "api-prod.lowes.com"}
+				// // dialConn, err := net.DialTimeout("tcp", "https://api-prod.lowes.com/oauth2/accesstoken", dialTimeout)
+				// tcpConn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+				// if err != nil {
+				// 	fmt.Println("net.DialTimeout error..........")
+				// 	return nil, err
+				// }
+
+				// uTlsConn := tls.UClient(tcpConn, &config, tls.HelloCustom)
+				// defer uTlsConn.Close()
+
+				config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
+
+				dialConn, err := net.DialTimeout("tcp", hostAddr, dialTimeout)
+				if err != nil {
+					fmt.Println("net.DialTimeout error: %+v", err)
+				}
+
+				/* establish UClient of UTLS...*/
+				uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
+				// defer uTlsConn.Close()
+
+				err = uTlsConn.ApplyPreset(generatedSpec)
+
+				if err != nil {
+					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+					fmt.Println("Handshake error..........")
+				}
+
+				err = uTlsConn.Handshake()
+				if err != nil {
+					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+					fmt.Println("uTlsConn Handshake error..........")
+				}
+
+				return uTlsConn, nil
+
+			},
+		},
+		// Timeout: time.Duration(time.Second * 5),
+	}
 	//Setting up first post request to get bearer authorization
 	req, err := http.NewRequest("POST", "https://api-prod.lowes.com/oauth2/accesstoken", strings.NewReader("client_id=pGAW7y8NJVlZvoWijVia21K4HzOqskRU&client_secret=zbwMYDyPp4XQS00E&grant_type=client_credentials"))
 	//adding header values for accesstoken from iOS mobile app
