@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -9,12 +11,14 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	tls "github.com/refraction-networking/utls"
 	uuid "github.com/satori/go.uuid"
 	"github.com/tidwall/gjson"
+	"golang.org/x/net/http2"
 )
 
 type Bearer_Response struct {
@@ -100,75 +104,130 @@ func handShakeFromWhareSharkBytes() {
 
 }
 
+func httpGetOverConn(conn net.Conn, alpn string) (*http.Response, error) {
+	req := &http.Request{
+		Method: "GET",
+		URL:    &url.URL{Host: "www." + hostname + "/"},
+		Header: make(http.Header),
+		Host:   "www." + hostname,
+	}
+
+	switch alpn {
+	case "h2":
+		req.Proto = "HTTP/2.0"
+		req.ProtoMajor = 2
+		req.ProtoMinor = 0
+
+		tr := http2.Transport{}
+		cConn, err := tr.NewClientConn(conn)
+		if err != nil {
+			return nil, err
+		}
+		return cConn.RoundTrip(req)
+	case "http/1.1", "":
+		req.Proto = "HTTP/1.1"
+		req.ProtoMajor = 1
+		req.ProtoMinor = 1
+
+		err := req.Write(conn)
+		if err != nil {
+			return nil, err
+		}
+		return http.ReadResponse(bufio.NewReader(conn), req)
+	default:
+		return nil, fmt.Errorf("unsupported ALPN: %v", alpn)
+	}
+}
+
+func getHttp1xResponse(req *http.Request, conn net.Conn) (*http.Response, error) {
+	req.Proto = "HTTP/1.1"
+	req.ProtoMajor = 1
+	req.ProtoMinor = 1
+
+	err := req.Write(conn)
+	if err != nil {
+		return nil, err
+	}
+	return http.ReadResponse(bufio.NewReader(conn), req)
+}
+
+func getHttp2Response(req *http.Request, conn net.Conn) (*http.Response, error) {
+	req.Proto = "HTTP/2.0"
+	req.ProtoMajor = 2
+	req.ProtoMinor = 0
+
+	tr := http2.Transport{}
+	cConn, err := tr.NewClientConn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return cConn.RoundTrip(req)
+}
+
 func main() {
 
-	handShakeFromWhareSharkBytes()
-	client := &http.Client{}
-	// client := &http.Client{
-	// 	// Jar: cookieJar,
-	// 	Transport: &http.Transport{
-	// 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-	// 			// Note that hardcoding the address is not necessary here. Only
-	// 			// do that if you want to ignore the DNS lookup that already
-	// 			// happened behind the scenes.
+	client := &http.Client{
+		// Jar: cookieJar,
+		Transport: &http.Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				// Note that hardcoding the address is not necessary here. Only
+				// do that if you want to ignore the DNS lookup that already
+				// happened behind the scenes.
 
-	// 			byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-	// 			helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
-	// 			_, err := hex.Decode(helloBytes, byteString)
-	// 			if err != nil {
-	// 				// TLSv1t.Errorf("got error: %v; expected to succeed", err)
-	// 				// return nil
-	// 				fmt.Println("Hex Decode error..........")
-	// 			}
+				byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+				helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
+				_, err := hex.Decode(helloBytes, byteString)
+				if err != nil {
+					// TLSv1t.Errorf("got error: %v; expected to succeed", err)
+					// return nil
+					fmt.Println("Hex Decode error..........")
+				}
 
-	// 			f := &tls.Fingerprinter{}
-	// 			generatedSpec, err := f.FingerprintClientHello(helloBytes)
-	// 			if err != nil {
-	// 				// t.Errorf("got error: %v; expected to succeed", err)
-	// 				fmt.Println("FingerprintClientHello error..........")
-	// 			}
+				f := &tls.Fingerprinter{}
+				generatedSpec, err := f.FingerprintClientHello(helloBytes)
+				if err != nil {
+					// t.Errorf("got error: %v; expected to succeed", err)
+					fmt.Println("FingerprintClientHello error..........")
+				}
 
-	// 			// config := tls.Config{ServerName: "api-prod.lowes.com"}
-	// 			// // dialConn, err := net.DialTimeout("tcp", "https://api-prod.lowes.com/oauth2/accesstoken", dialTimeout)
-	// 			// tcpConn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
-	// 			// if err != nil {
-	// 			// 	fmt.Println("net.DialTimeout error..........")
-	// 			// 	return nil, err
-	// 			// }
+				// config := tls.Config{ServerName: "api-prod.lowes.com"}
+				// tcpConn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+				// if err != nil {
+				// 	fmt.Println("net.DialTimeout error..........")
+				// 	return nil, err
+				// }
 
-	// 			// uTlsConn := tls.UClient(tcpConn, &config, tls.HelloCustom)
-	// 			// defer uTlsConn.Close()
+				config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
 
-	// 			config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
+				dialConn, err := net.DialTimeout("tcp", hostAddr, dialTimeout)
+				if err != nil {
+					fmt.Println("net.DialTimeout error: %+v", err)
+				}
 
-	// 			dialConn, err := net.DialTimeout("tcp", hostAddr, dialTimeout)
-	// 			if err != nil {
-	// 				fmt.Println("net.DialTimeout error: %+v", err)
-	// 			}
+				/* establish UClient of UTLS...*/
+				uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
+				// defer uTlsConn.Close()
 
-	// 			/* establish UClient of UTLS...*/
-	// 			uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
-	// 			// defer uTlsConn.Close()
+				err = uTlsConn.ApplyPreset(generatedSpec)
 
-	// 			err = uTlsConn.ApplyPreset(generatedSpec)
+				if err != nil {
+					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+					fmt.Println("Handshake error..........")
+				}
 
-	// 			if err != nil {
-	// 				fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
-	// 				fmt.Println("Handshake error..........")
-	// 			}
+				err = uTlsConn.Handshake()
+				if err != nil {
+					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+					fmt.Println("uTlsConn Handshake error..........")
+				}
 
-	// 			err = uTlsConn.Handshake()
-	// 			if err != nil {
-	// 				fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
-	// 				fmt.Println("uTlsConn Handshake error..........")
-	// 			}
+				return uTlsConn, nil
 
-	// 			return uTlsConn, nil
+			},
+		},
+		// Timeout: time.Duration(time.Second * 5),
+	}
 
-	// 		},
-	// 	},
-	// 	// Timeout: time.Duration(time.Second * 5),
-	// }
 	//Setting up first post request to get bearer authorization
 	req, err := http.NewRequest("POST", "https://api-prod.lowes.com/oauth2/accesstoken", strings.NewReader("client_id=pGAW7y8NJVlZvoWijVia21K4HzOqskRU&client_secret=zbwMYDyPp4XQS00E&grant_type=client_credentials"))
 	//adding header values for accesstoken from iOS mobile app
