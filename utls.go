@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -164,69 +163,70 @@ func getHttp2Response(req *http.Request, conn net.Conn) (*http.Response, error) 
 	return cConn.RoundTrip(req)
 }
 
+func getHttp2ResponseUsingConn(req *http.Request, cCon *http2.ClientConn) (*http.Response, error) {
+	req.Proto = "HTTP/2.0"
+	req.ProtoMajor = 2
+	req.ProtoMinor = 0
+	return cCon.RoundTrip(req)
+}
+
 func main() {
 
-	client := &http.Client{
-		// Jar: cookieJar,
-		Transport: &http.Transport{
-			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				// Note that hardcoding the address is not necessary here. Only
-				// do that if you want to ignore the DNS lookup that already
-				// happened behind the scenes.
+	// Note that hardcoding the address is not necessary here. Only
+	// do that if you want to ignore the DNS lookup that already
+	// happened behind the scenes.
 
-				byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-				helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
-				_, err := hex.Decode(helloBytes, byteString)
-				if err != nil {
-					// TLSv1t.Errorf("got error: %v; expected to succeed", err)
-					// return nil
-					fmt.Println("Hex Decode error..........")
-				}
+	// siumlate utls client hello using packet captured in wireshark.
 
-				f := &tls.Fingerprinter{}
-				generatedSpec, err := f.FingerprintClientHello(helloBytes)
-				if err != nil {
-					// t.Errorf("got error: %v; expected to succeed", err)
-					fmt.Println("FingerprintClientHello error..........")
-				}
-
-				// config := tls.Config{ServerName: "api-prod.lowes.com"}
-				// tcpConn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
-				// if err != nil {
-				// 	fmt.Println("net.DialTimeout error..........")
-				// 	return nil, err
-				// }
-
-				config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
-
-				dialConn, err := net.DialTimeout("tcp", hostAddr, dialTimeout)
-				if err != nil {
-					fmt.Println("net.DialTimeout error: %+v", err)
-				}
-
-				/* establish UClient of UTLS...*/
-				uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
-				// defer uTlsConn.Close()
-
-				err = uTlsConn.ApplyPreset(generatedSpec)
-
-				if err != nil {
-					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
-					fmt.Println("Handshake error..........")
-				}
-
-				err = uTlsConn.Handshake()
-				if err != nil {
-					fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
-					fmt.Println("uTlsConn Handshake error..........")
-				}
-
-				return uTlsConn, nil
-
-			},
-		},
-		// Timeout: time.Duration(time.Second * 5),
+	byteString := []byte("1603010200010001fc03034243e7dc703824d08998cf9d85325252ee3e600879b05f6e23c0d8812209611d20748229aa4d73af238a22efb6d3ee045f6febd8819edbc2a1ad6b20a0bc4d373c0022130113021303c02cc02bc024c023c00ac009cca9c030c02fc028c027c014c013cca801000191ff010001000000001700150000126170692d70726f642e6c6f7765732e636f6d00170000000d0018001604030804040105030203080508050501080606010201000500050100000000001200000010000e000c02683208687474702f312e31000b00020100003300260024001d002062dcea24a887376e333d5bc6c6a1ae2eda1309e8458942a246feccde1aeed370002d00020101002b00050403040303000a000a0008001d001700180019001500e1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+	helloBytes := make([]byte, hex.DecodedLen(len(byteString)))
+	_, err := hex.Decode(helloBytes, byteString)
+	if err != nil {
+		// TLSv1t.Errorf("got error: %v; expected to succeed", err)
+		// return nil
+		fmt.Println("Hex Decode error..........")
 	}
+
+	f := &tls.Fingerprinter{}
+	generatedSpec, err := f.FingerprintClientHello(helloBytes)
+	if err != nil {
+		// t.Errorf("got error: %v; expected to succeed", err)
+		fmt.Println("FingerprintClientHello error..........")
+	}
+
+	// config := tls.Config{ServerName: "api-prod.lowes.com"}
+	// tcpConn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+	// if err != nil {
+	// 	fmt.Println("net.DialTimeout error..........")
+	// 	return nil, err
+	// }
+
+	config := tls.Config{ServerName: hostname, MinVersion: tls.VersionTLS12}
+
+	dialConn, err := net.DialTimeout("tcp", hostAddr, dialTimeout)
+	if err != nil {
+		fmt.Println("net.DialTimeout error: %+v", err)
+	}
+
+	/* establish UClient of UTLS...*/
+	uTlsConn := tls.UClient(dialConn, &config, tls.HelloCustom)
+	// defer uTlsConn.Close()
+
+	err = uTlsConn.ApplyPreset(generatedSpec)
+
+	if err != nil {
+		fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+		fmt.Println("Handshake error..........")
+	}
+
+	err = uTlsConn.Handshake()
+	if err != nil {
+		fmt.Errorf("uTlsConn.Handshake() error: %+v", err)
+		fmt.Println("uTlsConn Handshake error..........")
+	}
+
+	tr := http2.Transport{}
+	cConn, err := tr.NewClientConn(uTlsConn)
 
 	//Setting up first post request to get bearer authorization
 	req, err := http.NewRequest("POST", "https://api-prod.lowes.com/oauth2/accesstoken", strings.NewReader("client_id=pGAW7y8NJVlZvoWijVia21K4HzOqskRU&client_secret=zbwMYDyPp4XQS00E&grant_type=client_credentials"))
@@ -238,7 +238,8 @@ func main() {
 	req.Header.Add("Host", "api-prod.lowes.com")
 	//req.Header.Add("Accept-Encoding", "gzip")//disabled since i dont know how to unpack the gzip yet
 
-	resp, err := client.Do(req)
+	// resp, err := client.Do(req)
+	resp, err := getHttp2ResponseUsingConn(req, cConn)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -283,7 +284,8 @@ func main() {
 	req2.Header.Add("x-api-version", "v1")
 	req2.Header.Add("Content-Length", "0")
 
-	resp, err = client.Do(req2)
+	// resp, err = client.Do(req2)
+	resp, err = getHttp2ResponseUsingConn(req2, cConn)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -334,7 +336,8 @@ func main() {
 		//req3.Header.Add("Connection", "Keep-Alive")
 		//req3.Header.Add("Accept-Encoding", "gzip")//disabled since i dont know how to unpack the gzip yet
 
-		resp, err = client.Do(req3)
+		// resp, err = client.Do(req3)
+		resp, err = getHttp2ResponseUsingConn(req3, cConn)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -342,6 +345,7 @@ func main() {
 		fmt.Println("Add to cart response: ", resp.StatusCode)
 
 		bodyBytes, err = ioutil.ReadAll(resp.Body)
+
 		if resp.StatusCode == 201 {
 			bodyString = string(bodyBytes)
 			//fmt.Println(bodyString)
@@ -388,7 +392,7 @@ func main() {
 				time.Sleep(1 * time.Second)
 				//add coupon to shopping cart
 
-				resp, err = client.Do(req4)
+				resp, err = getHttp2ResponseUsingConn(req4, cConn)
 				if err != nil {
 					log.Fatalln(err)
 				}
