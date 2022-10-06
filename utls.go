@@ -203,6 +203,14 @@ func getHttp2xResponseUsingConn(req *http.Request, cCon *http2.ClientConn) (*htt
 }
 
 
+
+func getHttp2xResponseUsingConn(req *http.Request, cCon *http2.ClientConn) (*http.Response, error) {
+	req.Proto = "HTTP/2.0"
+	req.ProtoMajor = 2
+	req.ProtoMinor = 0
+	return cCon.RoundTrip(req)
+}
+
 func main() {
 
 	// Note that hardcoding the address is not necessary here. Only
