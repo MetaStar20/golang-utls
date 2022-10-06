@@ -173,12 +173,33 @@ func getHttp2Response(req *http.Request, conn net.Conn) (*http.Response, error) 
 	return cConn.RoundTrip(req)
 }
 
+func getHttpResponse(req *http.Request, conn net.Conn) (*http.Response, error) {
+	req.Proto = "HTTP/2.0"
+	req.ProtoMajor = 2
+	req.ProtoMinor = 0
+
+	tr := http2.Transport{}
+	cConn, err := tr.NewClientConn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return cConn.RoundTrip(req)
+}
+
+
 func getHttp2ResponseUsingConn(req *http.Request, cCon *http2.ClientConn) (*http.Response, error) {
 	req.Proto = "HTTP/2.0"
 	req.ProtoMajor = 2
 	req.ProtoMinor = 0
 	return cCon.RoundTrip(req)
 }
+func getHttp2xResponseUsingConn(req *http.Request, cCon *http2.ClientConn) (*http.Response, error) {
+	req.Proto = "HTTP/2.0"
+	req.ProtoMajor = 2
+	req.ProtoMinor = 0
+	return cCon.RoundTrip(req)
+}
+
 
 func main() {
 
