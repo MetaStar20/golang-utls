@@ -133,6 +133,16 @@ func httpGetOverConn(conn net.Conn, alpn string) (*http.Response, error) {
 			return nil, err
 		}
 		return http.ReadResponse(bufio.NewReader(conn), req)
+	case "http/1.0", "":
+		req.Proto = "HTTP/1.1"
+		req.ProtoMajor = 1
+		req.ProtoMinor = 1
+
+		err := req.Write(conn)
+		if err != nil {
+			return nil, err
+		}
+		return http.ReadResponse(bufio.NewReader(conn), req)
 	default:
 		return nil, fmt.Errorf("unsupported ALPN: %v", alpn)
 	}
