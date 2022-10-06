@@ -33,6 +33,8 @@ type Bearer_Response struct {
 type Guest_Identity struct {
 	Access_token  string `json:"access_token"`
 	Refresh_token string `json:"refresh_token"`
+	Refresh_token string `json:"refresh_token"`
+
 }
 
 type Cart struct {
