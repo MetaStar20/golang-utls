@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -110,6 +109,9 @@ func httpGetOverConn(conn net.Conn, alpn string) (*http.Response, error) {
 		Header: make(http.Header),
 		Host:   "www." + hostname,
 	}
+
+	handShakeFromWhareSharkBytes()
+	client := &http.Client{}
 
 	switch alpn {
 	case "h2":
